@@ -27,6 +27,37 @@ const pointPopupTemplateCompiled = template(pointPopupTemplate, templateSettings
 const linePopupTemplateCompiled = template(linePopupTemplate, templateSettings);
 const areaPopupTemplateCompiled = template(areaPopupTemplate, templateSettings);
 
+const defaultLabels = {
+  measure: ('measure'),
+  measureDistancesAndAreas: ('measureDistancesAndAreas'),
+  createNewMeasurement: ('createNewMeasurement'),
+  startCreating: ('startCreating'),
+  finishMeasurement: ('finishMeasurement'),
+  lastPoint: ('lastPoint'),
+  area: ('area'),
+  perimeter: ('perimeter'),
+  pointLocation: ('pointLocation'),
+  areaMeasurement: ('areaMeasurement'),
+  linearMeasurement: ('linearMeasurement'),
+  pathDistance: ('pathDistance'),
+  centerOnArea: ('centerOnArea'),
+  centerOnLine: ('centerOnLine'),
+  centerOnLocation: ('centerOnLocation'),
+  cancel: ('cancel'),
+  delete: ('delete'),
+  acres: ('acres'),
+  feet: ('feet'),
+  kilometers: ('kilometers'),
+  hectares: ('hectares'),
+  meters: ('meters'),
+  miles: ('miles'),
+  sqfeet: ('sqfeet'),
+  sqmeters: ('sqmeters'),
+  sqmiles: ('sqmiles'),
+  decPoint: ('decPoint'),
+  thousandsSep: ('thousandsSep')
+};
+
 L.Control.Measure = L.Control.extend({
   _className: 'leaflet-control-measure',
   options: {
@@ -46,6 +77,7 @@ L.Control.Measure = L.Control.extend({
   },
   initialize: function(options) {
     L.setOptions(this, options);
+    this.options.labels = Object.assign(Object.assign({}, defaultLabels), this.options.labels);
     const { activeColor, completedColor } = this.options;
     this._symbols = new Symbology({ activeColor, completedColor });
     this.options.units = L.extend({}, units, this.options.units);
@@ -69,7 +101,8 @@ L.Control.Measure = L.Control.extend({
     container.innerHTML = controlTemplateCompiled({
       model: {
         className: className
-      }
+      },
+      labels: this.options.labels
     });
 
     // makes this work on IE touch devices by stopping it from firing a mouseout event when the touch is released
@@ -269,23 +302,23 @@ L.Control.Measure = L.Control.extend({
 
     function formatMeasure(val, unit, decPoint, thousandsSep) {
       const unitDisplays = {
-        acres: __('acres'),
-        feet: __('feet'),
-        kilometers: __('kilometers'),
-        hectares: __('hectares'),
-        meters: __('meters'),
-        miles: __('miles'),
-        sqfeet: __('sqfeet'),
-        sqmeters: __('sqmeters'),
-        sqmiles: __('sqmiles')
+        acres: ('acres'),
+        feet: ('feet'),
+        kilometers: ('kilometers'),
+        hectares: ('hectares'),
+        meters: ('meters'),
+        miles: ('miles'),
+        sqfeet: ('sqfeet'),
+        sqmeters: ('sqmeters'),
+        sqmiles: ('sqmiles')
       };
 
       const u = L.extend({ factor: 1, decimals: 0 }, unit);
       const formattedNumber = numberFormat(
         val * u.factor,
         u.decimals,
-        decPoint || __('decPoint'),
-        thousandsSep || __('thousandsSep')
+        decPoint || ('.'),
+        thousandsSep || (',')
       );
       const label = unitDisplays[u.display] || u.display;
       return [formattedNumber, label].join(' ');
@@ -302,7 +335,7 @@ L.Control.Measure = L.Control.extend({
         pointCount: this._latlngs.length
       }
     ));
-    this.$results.innerHTML = resultsTemplateCompiled({ model });
+    this.$results.innerHTML = resultsTemplateCompiled({ model, labels: this.options.labels });
   },
   // mouse move handler while measure in progress
   // adds floating measure marker under cursor
@@ -331,22 +364,25 @@ L.Control.Measure = L.Control.extend({
     if (latlngs.length > 2) {
       latlngs.push(latlngs[0]); // close path to get full perimeter measurement for areas
     }
-
+    
     const calced = calc(latlngs);
 
     if (latlngs.length === 1) {
       resultFeature = L.circleMarker(latlngs[0], this._symbols.getSymbol('resultPoint'));
       popupContent = pointPopupTemplateCompiled({
-        model: calced
+        model: calced,
+        labels: this.options.labels
       });
     } else if (latlngs.length === 2) {
       resultFeature = L.polyline(latlngs, this._symbols.getSymbol('resultLine'));
       popupContent = linePopupTemplateCompiled({
+        labels: this.options.labels,
         model: L.extend({}, calced, this._getMeasurementDisplayStrings(calced))
       });
     } else {
       resultFeature = L.polygon(latlngs, this._symbols.getSymbol('resultArea'));
       popupContent = areaPopupTemplateCompiled({
+        labels: this.options.labels,
         model: L.extend({}, calced, this._getMeasurementDisplayStrings(calced))
       });
     }
@@ -414,9 +450,7 @@ L.Control.Measure = L.Control.extend({
         // reset all vertexes to non-active class - only last vertex is active
         // `layer.setStyle({ className: 'layer-measurevertex'})` doesn't work. https://github.com/leaflet/leaflet/issues/2662
         // set attribute on path directly
-        if (layer._path) {
-          layer._path.setAttribute('class', vertexSymbol.className);
-        }
+        layer._path.setAttribute('class', vertexSymbol.className);
       });
 
       this._addNewVertex(latlng);
@@ -484,7 +518,7 @@ L.Map.mergeOptions({
 
 L.Map.addInitHook(function() {
   if (this.options.measureControl) {
-    this.measureControl = new L.Control.Measure().addTo(this);
+    this.measureControl = new L.Control.Measure(this.options.measureOptions).addTo(this);
   }
 });
 
